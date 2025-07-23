@@ -184,11 +184,11 @@ courses = defaultdict(list)
 for sec in secs:
     courses[sec.course].append(sec)
 
-sel = st.sidebar.multiselect("Asignaturas", sorted(courses), default=sorted(courses))
+sel = st.sidebar.multiselect("Asignaturas", sorted(courses), default=None)
 if not sel: st.stop()
 sub = {c:courses[c] for c in sel}
 teachers = sorted({str(sec.teacher) for secs in sub.values() for sec in secs})
-ranking = st.sidebar.multiselect("Ranking docentes", teachers, default=teachers)
+ranking = st.sidebar.multiselect("Ranking docentes", teachers, default=None)
 ranking_map = {t:i for i,t in enumerate(ranking)}
 banned = st.sidebar.multiselect("Docentes vetados", teachers)
 
