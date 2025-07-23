@@ -126,23 +126,45 @@ def compute_schedules(courses, ranking, min_free, banned,
 # --- Visualization ---
 def visualize(combo):
     DAY_MAP = {'Lu':0,'Ma':1,'Mi':2,'Ju':3,'Vi':4}
-    labels  = ["Lunes","Martes","Mié","Jue","Vie"]
-    fig,ax = plt.subplots(figsize=(10,6))
+    labels = ["Lunes","Martes","Mié","Jue","Vie"]
+    fig, ax = plt.subplots(figsize=(10,6))
+
+    # —————— Tu gráfico normal ——————
     ax.set_xticks([i+0.5 for i in range(5)])
     ax.set_xticklabels(labels)
-    ax.set_xlim(0,5); ax.set_ylim(20,8); ax.set_ylabel("Hora")
+    ax.set_xlim(0,5)
+    ax.set_ylim(20,8)
+    ax.set_ylabel("Hora")
     ax.grid(True, which='both', linestyle='--', linewidth=0.5)
-    cmap = {}; colors = plt.cm.tab20.colors
+
+    cmap = {} ; colors = plt.cm.tab20.colors
     for sec in combo:
-        for d,s,e in sec.meetings:
+        if not sec.meetings: continue
+        for d, s, e in sec.meetings:
             if d not in DAY_MAP: continue
             x = DAY_MAP[d]
             y0 = s.hour + s.minute/60
             h  = (e.hour + e.minute/60) - y0
-            if h<=0: continue
+            if h <= 0: continue
             c = cmap.setdefault(sec.course, colors[len(cmap)%len(colors)])
-            ax.add_patch(patches.Rectangle((x+0.05,y0),0.9,h, facecolor=c, edgecolor='black', alpha=0.6))
-            ax.text(x+0.5, y0+h/2, sec.cid, ha='center', va='center', fontsize=7)
+            ax.add_patch(patches.Rectangle(
+                (x+0.05, y0), 0.9, h,
+                facecolor=c, edgecolor='black', alpha=0.6))
+            ax.text(
+                x+0.5, y0 + h/2,
+                sec.cid,
+                ha='center', va='center', fontsize=7
+            )
+
+    fig.text(
+        0.95, 0.02,                         
+        "Federico Pereira\nfe.pereira@duocuc.cl",
+        ha="right", va="bottom",
+        fontsize=8,
+        color="gray",
+        alpha=0.5
+    )
+
     st.pyplot(fig)
 
 # --- UI: cargar CSV ---
