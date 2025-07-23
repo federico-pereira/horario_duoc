@@ -186,14 +186,18 @@ except Exception as e:
         st.stop()
     df = pd.read_csv(uploaded)
 
-# filtros
-for col in ["Carrera", "Plan", "Jornada"]:
-    val = st.sidebar.selectbox(col, sorted(df[col].unique()), index=0)
+# filtros dinámicos según columnas existentes
+filter_cols = [c for c in ["Carrera", "Plan", "Jornada"] if c in df.columns]
+for col in filter_cols:
+    opts = sorted(df[col].dropna().unique())
+    val = st.sidebar.selectbox(col, opts, index=0)
     df = df[df[col] == val]
-# Filtrar nivel (numérico) + optativos
-niv = [v for v in sorted(df["Nivel"].unique()) if v.isdigit()]
-val_niv = st.sidebar.selectbox("Nivel", niv, index=0)
-df = df[(df["Nivel"] == val_niv) | (df["Nivel"].str.lower() == "optativos")]
+# Filtrar Nivel si existe\ nif "Nivel" in df.columns:
+    niv = [v for v in sorted(df["Nivel"].dropna().unique()) if str(v).isdigit()]
+    if niv:
+        val_niv = st.sidebar.selectbox("Nivel", niv, index=0)
+        df = df[(df["Nivel"] == val_niv) | (df["Nivel"].astype(str).str.lower() == "optativos")]
+# fin filtros dinámicos
 
 # Construir secciones y cursos
 secs = build_sections(df)
