@@ -181,10 +181,10 @@ try:
     st.sidebar.success("✅ CSV cargado desde GitHub")
 except Exception as e:
     st.sidebar.error(f"No se pudo cargar CSV remoto: {e}")
-    df = st.file_uploader("O sube tu CSV local", type="csv")
-    if not df:
+    uploaded = st.file_uploader("O sube tu CSV local", type="csv")
+    if not uploaded:
         st.stop()
-    df = pd.read_csv(df)
+    df = pd.read_csv(uploaded)
 
 # filtros
 for col in ["Carrera", "Plan", "Jornada"]:
@@ -195,10 +195,34 @@ niv = [v for v in sorted(df["Nivel"].unique()) if v.isdigit()]
 val_niv = st.sidebar.selectbox("Nivel", niv, index=0)
 df = df[(df["Nivel"] == val_niv) | (df["Nivel"].str.lower() == "optativos")]
 
+# Construir secciones y cursos
+secs = build_sections(df)
+courses = defaultdict(list)
+for sec in secs:
+    courses[sec.course].append(sec)
+
+# Selección de asignaturas
+sel_courses = st.sidebar.multiselect(
+    "Asignaturas a incluir", sorted(courses.keys()), default=list(courses.keys())
+)
+if not sel_courses:
+    st.warning("Selecciona al menos una asignatura.")
+    st.stop()
+sub = {c: courses[c] for c in sel_courses}
+
+# Ranking y vetos
+teachers = sorted({sec.teacher for secs in sub.values() for sec in secs})
+ranking_sel = st.sidebar.multiselect(
+    "Ranking docentes (mejor a peor)", teachers, default=teachers
+)
+ranking_map = {t: i for i, t in enumerate(ranking_sel)}
+banned = st.sidebar.multiselect("Docentes vetados", teachers)
+
 # Ventana horaria preferida
 pref_start = st.sidebar.time_input("Desde", time(8,30))
 pref_end   = st.sidebar.time_input("Hasta", time(16,0))
 
+# Días libres y pesos
 min_free = st.sidebar.slider("Días libres mínimos", 0, 5, 0)
 st.sidebar.header("Pesos (1.0–5.0)")
 weights = {
@@ -209,52 +233,29 @@ weights = {
     'window': st.sidebar.slider("Ventana horaria", 1.0, 5.0, 3.0)
 }
 
-# Generar y almacenar resultados
+# Generar y mostrar resultados
 if st.sidebar.button("Generar horarios", key="gen_button"):
-    # Compute with current UI state
     st.session_state.scored = compute_schedules(
         sub, ranking_map, min_free, banned,
         pref_start, pref_end, weights
     )
-    # Store top5 choices for sidebar selector
-    st.session_state.top5 = st.session_state.scored[:5]
 
-# Mostrar resultados si existen
-if st.session_state.get('scored'):
-    top5 = st.session_state.scored[:5]
-    # Selector de soluciones
-    choice = st.sidebar.radio(
-        "Elige solución",
-        [f"Solución {i+1} ({s[0]:.2f})" for i,s in enumerate(top5)],
-        index=0,
-        key="sol_radio"
-    )
-    idx = int(choice.split()[1].strip('()')) - 1
-    st.subheader(choice)
-    for sec in top5[idx][1]:
-        st.write(sec)
-    st.write("### Gráfico de la solución")
-    visualize(top5[idx][1])
-else:
-    if st.session_state.get('scored') is None:
-        st.info("Pulsa 'Generar horarios' para iniciar.")
-    else:
-        st.warning("No hay soluciones válidas.")("Generar horarios", on_click=generate, key="gen_button")
-
-if st.session_state.scored:
-    top5 = st.session_state.scored[:5]
-    choice = st.sidebar.radio(
-        "Elige solución",
-        [f"Solución {i+1} ({s[0]:.2f})" for i,s in enumerate(top5)], index=0,
-        key="sol_radio"
-    )
-    idx = int(choice.split()[1].strip('()')) - 1
-    st.subheader(choice)
-    for sec in top5[idx][1]: st.write(sec)
-    st.write("### Gráfico de la solución")
-    visualize(top5[idx][1])
-else:
-    if st.session_state.scored is None:
-        st.info("Pulsa 'Generar horarios' para iniciar.")
-    else:
+if 'scored' in st.session_state and st.session_state.scored is not None:
+    scored = st.session_state.scored
+    if not scored:
         st.warning("No hay soluciones válidas.")
+    else:
+        top5 = scored[:5]
+        choice = st.sidebar.radio(
+            "Elige solución",
+            [f"Solución {i+1} ({s[0]:.2f})" for i, s in enumerate(top5)],
+            index=0, key="sol_radio"
+        )
+        idx = int(choice.split()[1].strip('()')) - 1
+        st.subheader(choice)
+        for sec in top5[idx][1]:
+            st.write(sec)
+        st.write("### Gráfico de la solución")
+        visualize(top5[idx][1])
+else:
+    st.info("Pulsa 'Generar horarios' para iniciar.")
