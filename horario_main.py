@@ -156,29 +156,39 @@ def visualize(combo):
             ax.text(x+0.5, y0+h/2, sec.cid, ha='center', va='center', fontsize=7)
     st.pyplot(fig)
 
-# --- UI ---
-uploaded = st.file_uploader("Sube tu CSV", type="csv")
-if not uploaded:
-    st.stop()
+# --- UI: obtener CSV desde GitHub ---
+csv_url = st.sidebar.text_input(
+    "URL raw GitHub CSV:",
+    "https://raw.githubusercontent.com/federico-pereira/horario_duoc/main/full.csv"
+)
+try:
+    df = pd.read_csv(csv_url)
+    st.sidebar.success("✅ CSV cargado desde GitHub")
+except Exception as e:
+    st.sidebar.error(f"No se pudo cargar CSV remoto: {e}")
+    df = st.file_uploader("O sube tu CSV local", type="csv")
+    if not df:
+        st.stop()
+    df = pd.read_csv(df)
 
-df = pd.read_csv(uploaded)
 # filtros
 for col in ["Carrera","Plan","Jornada"]:
     val = st.sidebar.selectbox(col, sorted(df[col].unique()), index=0)
     df = df[df[col]==val]
 niv = [v for v in sorted(df["Nivel"].unique()) if v.isdigit()]
-val = st.sidebar.selectbox("Nivel", niv, index=0)
-df = df[(df["Nivel"]==val)|(df["Nivel"].str.lower()=="optativos")]
+val_niv = st.sidebar.selectbox("Nivel", niv, index=0)
+df = df[(df["Nivel"] == val_niv) | (df["Nivel"].str.lower() == "optativos")]
 
 secs = build_sections(df)
 courses = defaultdict(list)
 for sec in secs:
     courses[sec.course].append(sec)
-sel = st.sidebar.multiselect("Asignaturas", sorted(courses), default=None)
+
+sel = st.sidebar.multiselect("Asignaturas", sorted(courses), default=sorted(courses))
 if not sel: st.stop()
 sub = {c:courses[c] for c in sel}
 teachers = sorted({str(sec.teacher) for secs in sub.values() for sec in secs})
-ranking = st.sidebar.multiselect("Ranking docentes", teachers, default=None)
+ranking = st.sidebar.multiselect("Ranking docentes", teachers, default=teachers)
 ranking_map = {t:i for i,t in enumerate(ranking)}
 banned = st.sidebar.multiselect("Docentes vetados", teachers)
 
@@ -190,8 +200,8 @@ min_free = st.sidebar.slider("Días libres mínimos", 0, 5, 0)
 st.sidebar.header("Pesos (1.0–5.0)")
 weights = {
     'rank':   st.sidebar.slider("Ranking docente", 1.0, 5.0, 3.0),
-    'win' :   st.sidebar.slider("Ventana pausa",   1.0, 5.0, 3.0),
-    'off' :   st.sidebar.slider("Días libres",     1.0, 5.0, 3.0),
+    'win':    st.sidebar.slider("Ventana pausa",   1.0, 5.0, 3.0),
+    'off':    st.sidebar.slider("Días libres",     1.0, 5.0, 3.0),
     'veto':   st.sidebar.slider("Veto docente",    1.0, 5.0, 3.0),
     'window': st.sidebar.slider("Ventana horaria", 1.0, 5.0, 3.0)
 }
