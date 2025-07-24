@@ -91,37 +91,71 @@ def compute_window(combo):
 
 def compute_schedules(courses, ranking, min_free, banned,
                       pref_start: time, pref_end: time, weights):
-    hard_window = (weights['window']==5)
-    hard_veto   = (weights['veto']==5)
+    hard_window = (weights['window'] == 5)
+    hard_veto   = (weights['veto']   == 5)
+    hard_off    = (weights['off']    == 5)
+    hard_win    = (weights['win']    == 5)
+    hard_rank   = (weights['rank']   == 5)
+
     combos = list(product(*courses.values()))
-    metrics = []
-    for combo in combos:
-        if any(overlaps(a,b) for a in combo for b in combo if a!=b): continue
-        days_occ = {d for sec in combo for d,_,_ in sec.meetings}
-        if (5-len(days_occ))<min_free: continue
-        veto_cnt = sum(sec.teacher in banned for sec in combo)
-        if hard_veto and veto_cnt>0: continue
-        vio = sum(1 for sec in combo for _,s,e in sec.meetings if s<pref_start or e>pref_end)
-        if hard_window and vio>0: continue
-        avg_rank = sum(ranking.get(sec.teacher,len(ranking)) for sec in combo)/len(combo)
-        win_gap  = compute_window(combo)
-        free_days=5-len(days_occ)
-        metrics.append((combo,avg_rank,win_gap,free_days,veto_cnt,vio))
-    if not metrics: return []
-    mx = {i: max(vals) or 1 for i, vals in enumerate(zip(*[m[1:] for m in metrics]))}
+    raw = []
+    if sub:
+        for combo in combos:
+            # solapamientos
+            if any(overlaps(a,b) for a in combo for b in combo if a!=b): continue
+            # días libres
+            days_occ = {d for sec in combo for d,_,_ in sec.meetings}
+            free_days = 5 - len(days_occ)
+            if free_days < min_free: continue
+            # vetos
+            veto_cnt = sum(sec.teacher in banned for sec in combo)
+            if hard_veto and veto_cnt>0: continue
+            # ventana horaria
+            vio = sum(1 for sec in combo for _,s,e in sec.meetings if s<pref_start or e>pref_end)
+            if hard_window and vio>0: continue
+
+            # métricas básicas
+            avg_rank = sum(ranking.get(sec.teacher,len(ranking)) for sec in combo)/len(combo)
+            win_gap  = compute_window(combo)
+
+            raw.append((combo, avg_rank, win_gap, free_days, veto_cnt, vio))
+
+    if not raw: return []
+
+    # si hard_win, filtrar solo el gap mínimo
+    if hard_win:
+        min_gap = min(r[2] for r in raw)
+        raw = [r for r in raw if r[2] == min_gap]
+    # si hard_off, filtrar solo los que cumplen EXACTO free_days==min_free
+    if hard_off:
+        raw = [r for r in raw if r[3] == min_free]
+    # si hard_rank, filtrar solo el mejor avg_rank (mínimo)
+    if hard_rank:
+        best_rank = min(r[1] for r in raw)
+        raw = [r for r in raw if r[1] == best_rank]
+
+    # ahora normalizamos y puntuamos
+    mx = {
+        'rank': max(r[1] for r in raw) or 1,
+        'win' : max(r[2] for r in raw) or 1,
+        'off' : max(r[3] for r in raw) or 1,
+        'veto': max(r[4] for r in raw) or 1,
+        'window': max(r[5] for r in raw) or 1
+    }
     total_w = sum(weights.values())
     scored = []
-    for combo,avg,gap,free,veto,vio in metrics:
+    for combo, avg, gap, free, veto, vio in raw:
         n = {
-            'rank':   1 - avg/mx[0],
-            'win':    1 - gap/mx[1],
-            'off':    free/mx[2],
-            'veto':   1 - veto/mx[3],
-            'window': 1 - vio/mx[4]
+            'rank':   1 - (avg / mx['rank']),
+            'win':    1 - (gap / mx['win']),
+            'off':    free / mx['off'],
+            'veto':   1 - (veto / mx['veto']),
+            'window': 1 - (vio  / mx['window'])
         }
-        score = sum(weights[k]*n[k] for k in weights)/total_w
-        scored.append((score,combo))
-    scored.sort(key=lambda x:x[0], reverse=True)
+        score = sum(weights[k] * n[k] for k in weights) / total_w
+        scored.append((score, combo))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
     return scored
 
 # --- Visualization ---
@@ -226,6 +260,7 @@ banned      = st.sidebar.multiselect("Docentes vetados", teachers)
 pref_start = st.sidebar.time_input("Desde", time(8,30))
 pref_end   = st.sidebar.time_input("Hasta", time(16,0))
 min_free   = st.sidebar.slider("Días libres mínimos", 0, 5, 0)
+st.sidebar.header("Importancia de variables 5 = si o si")
 weights    = {
     'rank':   st.sidebar.slider("Peso ranking docente",   1.0, 5.0, 3.0),
     'win':    st.sidebar.slider("Peso ventana pausa",     1.0, 5.0, 3.0),
@@ -237,15 +272,20 @@ weights    = {
 # --- Estado y generación ---
 if 'scored' not in st.session_state: st.session_state.scored = []
 if 'selected_idx' not in st.session_state: st.session_state.selected_idx = 0
+if 'generation_attempted' not in st.session_state:
+    st.session_state.generation_attempted = False
 
 def generate():
+    st.session_state.generation_attempted = True
     st.session_state.scored = compute_schedules(
         sub, ranking_map, min_free, banned,
         pref_start, pref_end, weights
     )
-    st.session_state.selected_idx = 0
+    if st.session_state.scored:
+        st.session_state.selected_idx = 0
 
 st.sidebar.button("Generar horarios", on_click=generate, key="gen_button")
+
 
 # --- Mostrar top5 como 5 botones ---
 if st.session_state.scored:
@@ -265,5 +305,7 @@ if st.session_state.scored:
         st.write(sec)
     st.write("### Gráfico de la solución")
     visualize(combo)
-else:
+elif(not sub):
     st.info("Introduzca datos antes de pulsar **Generar horarios** .")
+elif st.session_state.generation_attempted: 
+    st.warning("No se encontraron soluciones válidas.")
