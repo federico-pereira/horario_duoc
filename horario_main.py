@@ -170,8 +170,8 @@ def visualize(combo):
 
 # --- UI: cargar CSV ---
 csv_url = st.sidebar.text_input(
-    "URL raw GitHub CSV:",
-    "https://raw.githubusercontent.com/federico-pereira/horario_duoc/main/full.csv"
+    "URL GitHub :",
+    "https://github.com/federico-pereira/horario_duoc"
 )
 try:
     df = pd.read_csv(csv_url)
