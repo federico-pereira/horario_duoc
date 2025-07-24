@@ -174,7 +174,7 @@ csv_url = st.sidebar.text_input(
     "https://github.com/federico-pereira/horario_duoc"
 )
 try:
-    df = pd.read_csv(csv_url)
+    df = pd.read_csv("https://raw.githubusercontent.com/federico-pereira/horario_duoc/main/full.csv")
     st.sidebar.success("✅ CSV cargado desde GitHub")
 except:
     uploaded = st.sidebar.file_uploader("O sube tu CSV local", type="csv")
