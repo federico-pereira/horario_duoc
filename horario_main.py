@@ -266,4 +266,4 @@ if st.session_state.scored:
     st.write("### Gráfico de la solución")
     visualize(combo)
 else:
-    st.info("Pulsa **Generar horarios** para iniciar.")
+    st.info("Introduzca datos antes de pulsar **Generar horarios** .")
