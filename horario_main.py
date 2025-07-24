@@ -10,7 +10,8 @@ import matplotlib.patches as patches
 
 # --- Página ---
 st.set_page_config(layout="wide")
-st.title("Generador de Horarios con Prioridades")
+st.title("Generador de Horarios Duoc")
+st.subheader("Creado por Federico Pereira\nfedericopereirazz@gmail.com")
 
 # --- Helpers ---
 def strip_accents(s: str) -> str:
