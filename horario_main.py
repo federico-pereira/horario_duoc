@@ -7,6 +7,68 @@ from itertools import product
 from collections import defaultdict
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import csv
+import os
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+
+# Configuración del registro
+ANALYTICS_DB = "schedule_analytics.csv"
+ANALYTICS_HEADERS = [
+    "timestamp",
+    "ranking_docentes",
+    "veto_docentes",
+    "preferencia_horario",
+    "slider_ranking_docentes",
+    "slider_ventana_pausa",
+    "slider_dias_libres",
+    "Slider_veto_docente",
+    "slider_ventana_horaria"
+]
+
+def init_analytics_db():
+    """Inicializa el archivo de analytics si no existe"""
+    if not os.path.exists(ANALYTICS_DB):
+        with open(ANALYTICS_DB, mode='w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=ANALYTICS_HEADERS)
+            writer.writeheader()
+
+def save_to_google_sheets(data):
+    try:
+        scope = [
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/drive"
+        ]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["google"], scope)
+        client = gspread.authorize(creds)
+        
+        sheet = client.open_by_key(st.secrets["google"]["spreadsheet_id"])
+        worksheet = sheet.sheet1
+        
+        # Conversión segura a strings
+        def safe_join(items, delimiter="|"):
+            if not items:
+                return ""
+            return delimiter.join(str(item) for item in items)
+        
+        row = [
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            safe_join(data.get("preferred_teachers", [])),
+            safe_join(data.get("banned_teachers", [])),
+            str(data.get("time_prefs", {})),
+            str(data.get("weights", {}).get("rank", "")),
+            str(data.get("weights", {}).get("win", "")),
+            str(data.get("weights", {}).get("off", "")),
+            str(data.get("weights", {}).get("veto", "")),
+            str(data.get("weights", {}).get("window", ""))
+        ]
+        
+        worksheet.append_row(row)
+        return True
+        
+    except Exception as e:
+        print(f"Error detallado: {str(e)}")
+        return False
 
 # --- Página ---
 st.set_page_config(layout="wide")
@@ -289,6 +351,18 @@ st.sidebar.button("Generar horarios", on_click=generate, key="gen_button")
 
 # --- Mostrar top5 como 5 botones ---
 if st.session_state.scored:
+
+    save_to_google_sheets({
+        "preferred_teachers": [str(t) for t in ranking_sel],  # Convierte a strings
+        "banned_teachers": [str(t) for t in banned],         # Convierte a strings
+        "time_prefs": {
+            "hora_inicio": pref_start.strftime("%H:%M"),
+            "hora_fin": pref_end.strftime("%H:%M"),
+            "dias_libres": min_free
+        },
+        "weights": weights
+    })
+
     st.sidebar.markdown("### Elige una solución:")
     top5 = st.session_state.scored[:5]
     for i,(score,_) in enumerate(top5):
